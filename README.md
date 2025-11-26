@@ -80,8 +80,8 @@ E_{scenario} = \begin{bmatrix}
 \end{bmatrix}
 \quad
 w_{scenario}(k) = \begin{bmatrix}
-V_{grid}^*(k) \\
-f_{grid}^*(k)
+V_{grid}^{*(k)} \\
+f_{grid}^{*(k)}
 \end{bmatrix}
 $$
 
