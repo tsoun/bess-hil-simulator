@@ -1,242 +1,162 @@
-BESS HIL Simulator
-==================
+# BESS HIL Simulator
 
-A Hardware-in-the-Loop (HIL) simulator for Power Conversion System (PCS) and Battery Energy Storage System (BESS) designed to validate Energy Management System (EMS) software.
 
-Overview
---------
 
-This project implements a real-time simulator that models the physical dynamics of grid-connected inverters, including:
+[Image of signal flow schematic]
 
--   First-order lag response for active and reactive power
 
--   Transport delay to simulate SCADA/communication latency
+## Overview
 
--   P-Q capability curves with voltage-dependent reactive power limits
+This repository contains a **Hardware-in-the-Loop (HIL) Simulator** designed for testing and validating Energy Management Systems (EMS) software. The simulator acts as a digital twin of a Power Conversion System (PCS) and Battery Energy Storage System (BESS), modeling the physical dynamics, grid coupling, and communication latencies.
 
--   Modbus TCP interface for EMS communication
+It allows an external EMS to read telemetry and write setpoints via **Modbus TCP**, while the simulator runs a real-time physics engine internally.
 
-The simulator provides a realistic testing environment for EMS validation by accurately reproducing the dynamic behavior and communication delays of actual PCS/BESS systems.
+## Features
 
-Architecture
-------------
+* **Real-Time Physics Engine:** Models Active ($P$) and Reactive ($Q$) power evolution using First-Order Lag dynamics (Low Pass Filter).
+* **Transport Delay Simulation:** Simulates realistic SCADA/metering delays ($N$ steps) to test EMS feedback loops.
+* **Modbus TCP Server:** Acts as a slave device (Port 502), exposing measurements on Input Registers and accepting commands via Holding Registers.
+* **P-Q Capability Curve:** Implements complex saturation logic where reactive power limits ($Q_{max}/Q_{min}$) float dynamically based on grid voltage and active power levels.
+* **Grid Scenarios:** Includes a scenario generator that injects voltage sags ($0.95$ pu) and swells ($1.05$ pu) to trigger capability curve changes.
+* **Web-Based Data Viewer:** A standalone `viewer.html` tool to visualize `BessData.csv` logs with interactive charts and zoom capabilities.
 
-### System Components
+## System Architecture
 
-text
-
-┌─────────────────┐    Modbus TCP    ┌──────────────────┐
-│   EMS (DUT)     │◄────────────────►│  HIL Simulator   │
-│                 │                  │                  │
-│ - Control Logic │   P_ref, Q_ref   │ - Physics Engine │
-│ - SCADA Display │   P_meas, Q_meas │ - Delay Model    │
-└─────────────────┘                  │ - Capability     │
-                                     │ - Modbus Server  │
-                                     └──────────────────┘
+The interaction between the Device Under Test (EMS) and the Simulator is cyclic:
+1.  **EMS** sends control references ($u$) via Modbus.
+2.  **Simulator** evolves internal physics state ($x$) based on time constants.
+3.  **Simulator** returns delayed feedback measurements ($y$) to the EMS.
 
 ### Mathematical Model
+The system uses a discrete-time state-space representation.
 
-The simulator uses a discrete-time state-space representation:
+#### 1. State Vector ($x$)
+The state vector represents the physical state of the plant at the inverter terminals:
 
-State Vector:
+$$
+x(k) = \begin{bmatrix} P_{phys}(k) \\ Q_{phys}(k) \\ V_{grid}(k) \\ f_{grid}(k) \end{bmatrix}
+$$
 
-text
+#### 2. Input Vector ($u$)
+The input vector consists of the setpoints received from the EMS:
 
-x(k) = [P_phys(k), Q_phys(k), V_grid(k), f_grid(k)]^T
+$$
+u(k) = \begin{bmatrix} P_{setpoint}(k) \\ Q_{setpoint}(k) \end{bmatrix}
+$$
 
-Input Vector:
+#### 3. State Evolution Equation
+The discrete-time dynamics are modeled as a 1st-order lag for Power, while Voltage and Frequency are scenario-driven inputs:
 
-text
+$$
+x(k+1) = A_d x(k) + B_d u(k) + E_{scenario} w_{scenario}(k)
+$$
 
-u(k) = [P_setpoint(k), Q_setpoint(k)]^T
+Where the system matrices are defined as:
 
-Dynamics:
+$$
+A_d = \begin{bmatrix}
+e^{-T_s/\tau_P} & 0 & 0 & 0 \\
+0 & e^{-T_s/\tau_Q} & 0 & 0 \\
+0 & 0 & 0 & 0 \\
+0 & 0 & 0 & 0
+\end{bmatrix}
+$$
 
-text
+$$
+B_d = \begin{bmatrix}
+1 - e^{-T_s/\tau_P} & 0 \\
+0 & 1 - e^{-T_s/\tau_Q} \\
+0 & 0 \\
+0 & 0
+\end{bmatrix}
+$$
 
-x(k+1) = A_d * x(k) + B_d * u(k) + E_scenario * w_scenario(k)
+$$
+E_{scenario} = \begin{bmatrix}
+0 & 0 \\
+0 & 0 \\
+1 & 0 \\
+0 & 1
+\end{bmatrix}
+\quad
+w_{scenario}(k) = \begin{bmatrix}
+V_{grid}^*(k) \\
+f_{grid}^*(k)
+\end{bmatrix}
+$$
 
-Measurement Model:
+#### 4. Output Vector ($y$)
+To simulate realistic SCADA feedback, a transport delay $N = T_{delay} / T_s$ is applied to the physical states. The output seen by the EMS is:
 
-text
+$$y(k) = \begin{bmatrix} P_{meas}(k) \\ Q_{meas}(k) \\ PF_{meas}(k) \\ V_{meas}(k) \\ f_{meas}(k) \\ I_{meas}(k) \end{bmatrix} = \mathcal{H}(x(k-N))$$
 
-y(k) = H(x(k-N))  (with N-step transport delay)
+Where current $I_{meas}$ is derived non-linearly as $I_{meas} = \frac{\sqrt{P^2 + Q^2}}{V}$.
 
-Features
---------
+## Project Structure
 
--   Real-time Physics Simulation: 100ms time step with configurable time constants
+* **`Program.cs`**: The main entry point. Initializes the model, starts the Modbus server, and runs the real-time simulation loop.
+* **`BessPhysicsModel.cs`**: Encapsulates the physics engine, IIR filters, and delay buffers (Queues).
+* **`ModbusServerWrapper.cs`**: Wraps the `NModbus` logic to handle register mapping and TCP connections.
+* **`PqCapabilityCurve.cs`**: Handles the complex saturation logic and interpolation between voltage levels (0.9pu to 1.1pu).
+* **`viewer.html`**: A frontend tool for analyzing simulation CSV logs.
+* **`BessData.csv`**: The output log file generated during simulation.
 
--   Communication Latency: Configurable transport delay (default: 500ms)
-
--   P-Q Capability Curves: Voltage-dependent reactive power limits
-
--   Modbus TCP Interface: Standard industrial protocol for EMS integration
-
--   Interactive Console: Manual command input for testing
-
--   Data Logging: CSV output for analysis and validation
-
--   Web Visualization: HTML-based data analyzer with interactive charts
-
-Project Structure
------------------
-
-text
-
-bess-hil-simulator/
-├── Program.cs                 # Main application and real-time loop
-├── BessPhysicsModel.cs        # Core physics engine implementation
-├── PqCapabilityCurve.cs       # P-Q capability curve logic
-├── ModbusServerWrapper.cs     # Modbus TCP server implementation
-├── viewer.html               # Web-based data visualization
-├── PCS Simulator.pdf         # Technical documentation
-└── README.md                 # This file
-
-Configuration Parameters
-------------------------
-
-| Parameter | Value | Description |
-| --- | --- | --- |
-| `T_s` | 0.1 s | Simulation sampling time |
-| `T_delay` | 0.5 s | Total measurement/communication latency |
-| `τ_P` | 0.1 s | Active power response time constant |
-| `τ_Q` | 0.2 s | Reactive power response time constant |
-| `S_max` | 0.21 MVA | Inverter apparent power capacity |
-
-Installation & Usage
---------------------
+## Getting Started
 
 ### Prerequisites
+* .NET 6.0 SDK or later.
+* A Modbus TCP Client (e.g., QModMaster) or an actual EMS to act as the Master.
+* Modern Web Browser (for `viewer.html`).
 
--   .NET 6.0 or later
-
--   Web browser (for data visualization)
+### Installation
+1.  Clone the repository.
+2.  Open the solution in Visual Studio or VS Code.
+3.  Restore NuGet packages (specifically `NModbus`).
 
 ### Running the Simulator
+Run the application with administrative privileges (required to bind to Port 502).
 
-1.  Clone the repository:
-
-    bash
-
-    git clone https://github.com/your-username/bess-hil-simulator.git
-    cd bess-hil-simulator
-
-2.  Build and run:
-
-    bash
-
-    dotnet build
     dotnet run
 
-3.  Using the simulator:
+> **Note:** If Port 502 is blocked or in use, modify `ModbusServerWrapper.Start(502)` in `Program.cs` to use port `5020`.
 
-    -   The simulator starts a Modbus TCP server on port 502
+## Usage
 
-    -   Enter power setpoints in the console: `P[MW] Q[MVAR]` (e.g., `1.0 0.5`)
+### 1. Console Control
+You can manually inject setpoints directly via the console window to test step responses without an EMS.
 
-    -   Type `exit` to stop the simulation
+**Format:** `P[MW] Q[MVAR]`
 
-    -   Data is automatically logged to `BessData.csv`
+    Enter command (P Q) or 'exit': 1.0 0.5
+    >>> Command queued: P=1.00 MW, Q=0.50 MVAR
 
-### Data Visualization
+### 2. Modbus Interface (EMS Connection)
+The simulator listens on **Port 502** (Unit ID 1). Data is stored as **32-bit Floating Point** values (spanning 2 registers each).
 
-1.  Run the simulator to generate `BessData.csv`
+| Signal | Type | Register Type | Address (Offset) | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **Setpoint P** | Float (32-bit) | Holding (RW) | 40001 (0) | Active Power Command |
+| **Setpoint Q** | Float (32-bit) | Holding (RW) | 40003 (2) | Reactive Power Command |
+| **Meas P** | Float (32-bit) | Input (RO) | 30001 (0) | Active Power Feedback |
+| **Meas Q** | Float (32-bit) | Input (RO) | 30003 (2) | Reactive Power Feedback |
+| **Meas V** | Float (32-bit) | Input (RO) | 30005 (4) | Grid Voltage |
+| **Meas F** | Float (32-bit) | Input (RO) | 30007 (6) | Grid Frequency |
+| **Meas I** | Float (32-bit) | Input (RO) | 30009 (8) | Current (Derived) |
 
-2.  Open `viewer.html` in a web browser
+### 3. Data Visualization
+1.  Let the simulation run; it logs data to `BessData.csv` in real-time.
+2.  Open `viewer.html` in your browser.
+3.  Click **Load CSV File** and select the generated `BessData.csv`.
+4.  Use the tabs to view **Charts**, **Summary Stats**, and **Data Tables**.
 
-3.  Load the CSV file to view interactive charts and analysis
+## Configuration
 
-Modbus Register Map
--------------------
+Key simulation parameters are defined in `Program.cs` and derived from the system design:
 
-### Holding Registers (Write by EMS)
-
-| Register | Address | Description | Data Type |
-| --- | --- | --- | --- |
-| P_setpoint | 40001-40002 | Active power reference (MW) | Float32 |
-| Q_setpoint | 40003-40004 | Reactive power reference (MVAR) | Float32 |
-
-### Input Registers (Read by EMS)
-
-| Register | Address | Description | Data Type |
-| --- | --- | --- | --- |
-| P_meas | 30001-30002 | Measured active power (MW) | Float32 |
-| Q_meas | 30003-30004 | Measured reactive power (MVAR) | Float32 |
-| V_meas | 30005-30006 | Measured voltage (pu) | Float32 |
-| f_meas | 30007-30008 | Measured frequency (Hz) | Float32 |
-| I_meas | 30009-30010 | Measured current (kA) | Float32 |
-
-Testing Scenarios
------------------
-
-The simulator includes built-in test scenarios:
-
--   Normal Operation: V = 1.0 pu
-
--   Voltage Sag: V = 0.95 pu (30s - 40s)
-
--   Voltage Swell: V = 1.05 pu (60s - 70s)
-
-These scenarios trigger the P-Q capability curve logic, demonstrating dynamic reactive power limit adjustments.
-
-Development
------------
-
-### Key Classes
-
--   `BessPhysicsModel`: Implements the core physics engine with delay buffers
-
--   `PqCapabilityCurve`: Handles voltage-dependent reactive power limits
-
--   `ModbusServerWrapper`: Manages Modbus TCP communication
-
--   `Program`: Main application with real-time simulation loop
-
-### Extending the Simulator
-
--   Add new grid scenarios by modifying the scenario generator in `Program.cs`
-
--   Implement different capability curves by extending `PqCapabilityCurve.cs`
-
--   Add new measurement points by modifying the `PlantOutput` structure
-
-License
--------
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-Documentation
--------------
-
-For detailed technical documentation, see `PCS Simulator.pdf` which includes:
-
--   Mathematical modeling details
-
--   System architecture
-
--   Validation results
-
--   Implementation specifications
-
-Contributing
-------------
-
-1.  Fork the repository
-
-2.  Create a feature branch
-
-3.  Commit your changes
-
-4.  Push to the branch
-
-5.  Create a Pull Request
-
-Support
--------
-
-For issues and questions:
-
--   Create an issue in the GitHub repository
-
--   Check the technical documentation in `PCS Simulator.pdf`
+| Parameter | Value | Description |
+| :--- | :--- | :--- |
+| **Sampling Time ($T_s$)** | 0.1 s | Simulation Step Size |
+| **Total Delay ($T_{delay}$)** | 0.5 s | Physics to Feedback latency |
+| **P Time Constant ($\tau_P$)** | 0.1 s | Active Power Response Lag |
+| **Q Time Constant ($\tau_Q$)** | 0.2 s | Reactive Power Response Lag |
+| **Max Apparent Power ($S_{max}$)** | 0.21 MVA | Inverter Capacity Limit |
