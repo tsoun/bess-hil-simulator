@@ -88,7 +88,14 @@ $$
 #### 4. Output Vector ($y$)
 To simulate realistic SCADA feedback, a transport delay $N = T_{delay} / T_s$ is applied to the physical states. The output seen by the EMS is:
 
-$$y(k) = \begin{bmatrix} P_{meas}(k) \\ Q_{meas}(k) \\ PF_{meas}(k) \\ V_{meas}(k) \\ f_{meas}(k) \\ I_{meas}(k) \end{bmatrix} = \mathcal{H}(x(k-N))$$
+$$y(k) = \begin{bmatrix} 
+P_{meas}(k) \\
+Q_{meas}(k) \\
+PF_{meas}(k) \\
+V_{meas}(k) \\
+f_{meas}(k) \\
+I_{meas}(k)
+\end{bmatrix} = \mathcal{H}(x(k-N))$$
 
 Where current $I_{meas}$ is derived non-linearly as $I_{meas} = \frac{\sqrt{P^2 + Q^2}}{V}$.
 
