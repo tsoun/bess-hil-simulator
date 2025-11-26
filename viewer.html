@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power System Data Analyzer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/1.2.1/chartjs-plugin-zoom.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .controls {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .control-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+        label {
+            font-weight: 600;
+            color: #495057;
+        }
+        input[type="file"] {
+            padding: 8px;
+            border: 2px solid #dee2e6;
+            border-radius: 5px;
+            background: white;
+        }
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 20px;
+            padding: 30px;
+        }
+        .chart-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+            position: relative;
+        }
+        .chart-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 15px;
+            text-align: center;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .chart-wrapper {
+            position: relative;
+            height: 400px;
+        }
+        .chart-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .chart-btn {
+            padding: 6px 12px;
+            border: 1px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.3s;
+        }
+        .chart-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        .stat-label {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .table-container {
+            padding: 20px;
+            overflow-x: auto;
+            max-height: 600px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+        th, td {
+            padding: 12px;
+            text-align: center;
+            border-bottom: 1px solid #dee2e6;
+        }
+        th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            padding: 20px 20px 0 20px;
+        }
+        .tab-btn {
+            padding: 10px 20px;
+            border: none;
+            background: #e9ecef;
+            cursor: pointer;
+            border-radius: 5px 5px 0 0;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .tab-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        .summary-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .summary-card h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        .summary-card .metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 0.9em;
+        }
+        .summary-card .metric .label {
+            color: #6c757d;
+        }
+        .summary-card .metric .value {
+            font-weight: 600;
+            color: #495057;
+        }
+        .export-btn {
+            padding: 10px 20px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .export-btn:hover {
+            background: #218838;
+        }
+        .zoom-info {
+            font-size: 0.8em;
+            color: #6c757d;
+            text-align: center;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>BESS HIL Simulator</h1>
+            <p>Monitoring signal interchange and behaviour of the Hardware-in-the-Loop implementation of the PCS/BESS/Grid system</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>📁 Load CSV File:</label>
+                <input type="file" id="fileInput" accept=".csv" onchange="loadFile()">
+                <span id="fileStatus" style="color: #6c757d; font-size: 0.9em;"></span>
+                <button class="export-btn" onclick="exportCharts()" id="exportBtn" style="display: none;">📊 Export All Charts</button>
+            </div>
+        </div>
+
+        <div class="tab-buttons">
+            <button class="tab-btn active" onclick="switchTab('charts')">📊 Charts</button>
+            <button class="tab-btn" onclick="switchTab('summary')">📈 Summary</button>
+            <button class="tab-btn" onclick="switchTab('table')">📋 Data Table</button>
+        </div>
+
+        <div id="chartsTab" class="tab-content active">
+            <div id="chartGrid" class="chart-grid"></div>
+        </div>
+
+        <div id="summaryTab" class="tab-content">
+            <div id="summaryGrid" class="summary-grid"></div>
+        </div>
+
+        <div id="tableTab" class="tab-content">
+            <div class="table-container">
+                <table id="dataTable"></table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let data = [];
+        let headers = [];
+        let charts = [];
+
+        // Crosshair plugin for Chart.js
+        const crosshairPlugin = {
+            id: 'crosshair',
+            afterDraw: (chart) => {
+                if (chart.crosshair) {
+                    const ctx = chart.ctx;
+                    const x = chart.crosshair.x;
+                    const y = chart.crosshair.y;
+                    const chartArea = chart.chartArea;
+
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.strokeStyle = 'rgba(102, 126, 234, 0.8)';
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([5, 5]);
+
+                    // Vertical line
+                    ctx.moveTo(x, chartArea.top);
+                    ctx.lineTo(x, chartArea.bottom);
+
+                    // Horizontal line
+                    ctx.moveTo(chartArea.left, y);
+                    ctx.lineTo(chartArea.right, y);
+
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+        };
+
+        Chart.register(crosshairPlugin);
+
+        function loadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                return;
+            }
+
+            document.getElementById('fileStatus').textContent = 'Loading...';
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const csvText = e.target.result;
+                    parseCSV(csvText);
+                    
+                    if (data.length > 0) {
+                        document.getElementById('fileStatus').textContent = `✓ Loaded ${data.length} rows`;
+                        document.getElementById('fileStatus').style.color = '#28a745';
+                        document.getElementById('exportBtn').style.display = 'inline-block';
+                        
+                        createCharts();
+                        buildTable();
+                        buildSummary();
+                    } else {
+                        document.getElementById('fileStatus').textContent = '✗ No data found';
+                        document.getElementById('fileStatus').style.color = '#dc3545';
+                    }
+                } catch (error) {
+                    document.getElementById('fileStatus').textContent = '✗ Error loading file';
+                    document.getElementById('fileStatus').style.color = '#dc3545';
+                    console.error('Error parsing CSV:', error);
+                }
+            };
+            
+            reader.onerror = function() {
+                document.getElementById('fileStatus').textContent = '✗ Error reading file';
+                document.getElementById('fileStatus').style.color = '#dc3545';
+            };
+            
+            reader.readAsText(file);
+        }
+
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split('\n');
+            headers = lines[0].split(',').map(h => h.trim());
+            
+            data = lines.slice(1).map(line => {
+                const values = line.split(',');
+                const obj = {};
+                headers.forEach((header, i) => {
+                    obj[header] = parseFloat(values[i]);
+                });
+                return obj;
+            }).filter(row => !isNaN(row[headers[0]]));
+        }
+
+        function groupParameters() {
+            // Group parameters by their base name (removing Set, Phys, Meas prefixes)
+            const groups = {};
+            
+            headers.slice(1).forEach(header => {
+                let baseName = header;
+                let type = 'other';
+                
+                if (header.startsWith('Set')) {
+                    baseName = header.substring(3);
+                    type = 'setpoint';
+                } else if (header.startsWith('Phys')) {
+                    baseName = header.substring(4);
+                    type = 'physical';
+                } else if (header.startsWith('Meas')) {
+                    baseName = header.substring(4);
+                    type = 'measured';
+                }
+                
+                if (!groups[baseName]) {
+                    groups[baseName] = { setpoint: null, physical: null, measured: null };
+                }
+                groups[baseName][type] = header;
+            });
+            
+            return groups;
+        }
+
+        function createCharts() {
+            const chartGrid = document.getElementById('chartGrid');
+            chartGrid.innerHTML = '';
+            charts = [];
+            
+            const groups = groupParameters();
+            const timeHeader = headers[0];
+            
+            Object.keys(groups).forEach((baseName, index) => {
+                const group = groups[baseName];
+                
+                // Only create chart if at least one of set/phys/meas exists
+                if (!group.setpoint && !group.physical && !group.measured) return;
+                
+                const card = document.createElement('div');
+                card.className = 'chart-card';
+                
+                const title = document.createElement('div');
+                title.className = 'chart-title';
+                title.textContent = baseName.replace(/_/g, ' ');
+                
+                const wrapper = document.createElement('div');
+                wrapper.className = 'chart-wrapper';
+                
+                const canvas = document.createElement('canvas');
+                canvas.id = `chart-${index}`;
+                
+                // Create chart controls
+                const controls = document.createElement('div');
+                controls.className = 'chart-controls';
+                
+                const resetBtn = document.createElement('button');
+                resetBtn.className = 'chart-btn';
+                resetBtn.textContent = 'Reset Zoom';
+                resetBtn.onclick = () => resetZoom(index);
+                
+                const zoomInfo = document.createElement('div');
+                zoomInfo.className = 'zoom-info';
+                zoomInfo.id = `zoom-info-${index}`;
+                zoomInfo.textContent = 'Use mouse wheel to zoom, drag to pan';
+                
+                controls.appendChild(resetBtn);
+                
+                wrapper.appendChild(canvas);
+                card.appendChild(title);
+                card.appendChild(wrapper);
+                card.appendChild(controls);
+                card.appendChild(zoomInfo);
+                chartGrid.appendChild(card);
+                
+                // Create datasets
+                const datasets = [];
+                const colors = {
+                    setpoint: { border: '#ff6b6b', bg: 'rgba(255, 107, 107, 0.1)' },
+                    physical: { border: '#4ecdc4', bg: 'rgba(78, 205, 196, 0.1)' },
+                    measured: { border: '#ffe66d', bg: 'rgba(255, 230, 109, 0.1)' }
+                };
+                
+                if (group.setpoint) {
+                    datasets.push({
+                        label: 'Setpoint',
+                        data: data.map(d => d[group.setpoint]),
+                        borderColor: colors.setpoint.border,
+                        backgroundColor: colors.setpoint.bg,
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 5
+                    });
+                }
+                
+                if (group.physical) {
+                    datasets.push({
+                        label: 'Physical',
+                        data: data.map(d => d[group.physical]),
+                        borderColor: colors.physical.border,
+                        backgroundColor: colors.physical.bg,
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 5
+                    });
+                }
+                
+                if (group.measured) {
+                    datasets.push({
+                        label: 'Measured',
+                        data: data.map(d => d[group.measured]),
+                        borderColor: colors.measured.border,
+                        backgroundColor: colors.measured.bg,
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 5
+                    });
+                }
+                
+                const ctx = canvas.getContext('2d');
+                const chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(d => d[timeHeader].toFixed(2)),
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top',
+                                labels: {
+                                    usePointStyle: true,
+                                    padding: 15
+                                }
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                padding: 12,
+                                titleFont: {
+                                    size: 14
+                                },
+                                bodyFont: {
+                                    size: 13
+                                },
+                                callbacks: {
+                                    title: function(context) {
+                                        return 'Time: ' + context[0].label + ' s';
+                                    },
+                                    label: function(context) {
+                                        return context.dataset.label + ': ' + context.parsed.y.toFixed(4);
+                                    }
+                                }
+                            },
+                            zoom: {
+                                pan: {
+                                    enabled: true,
+                                    mode: 'xy',
+                                    modifierKey: 'ctrl',
+                                },
+                                zoom: {
+                                    wheel: {
+                                        enabled: true,
+                                    },
+                                    pinch: {
+                                        enabled: true
+                                    },
+                                    mode: 'xy',
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Time (s)',
+                                    font: {
+                                        size: 12,
+                                        weight: 'bold'
+                                    }
+                                },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Value',
+                                    font: {
+                                        size: 12,
+                                        weight: 'bold'
+                                    }
+                                },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            }
+                        },
+                        onHover: function(event, activeElements) {
+                            const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
+                            chart.crosshair = {
+                                x: canvasPosition.x,
+                                y: canvasPosition.y
+                            };
+                            chart.draw();
+                        }
+                    }
+                });
+                
+                // Clear crosshair when mouse leaves
+                canvas.addEventListener('mouseleave', function() {
+                    chart.crosshair = null;
+                    chart.draw();
+                });
+                
+                // Update zoom info when zooming
+                chart.options.plugins.zoom.zoom.onZoomComplete = function({ chart }) {
+                    updateZoomInfo(chart, index);
+                };
+                
+                chart.options.plugins.zoom.pan.onPanComplete = function({ chart }) {
+                    updateZoomInfo(chart, index);
+                };
+                
+                charts.push({ chart, baseName, group, index });
+            });
+        }
+
+        function updateZoomInfo(chart, index) {
+            const zoomInfo = document.getElementById(`zoom-info-${index}`);
+            if (!zoomInfo) return;
+            
+            const xScale = chart.scales.x;
+            const yScale = chart.scales.y;
+            
+            if (xScale && yScale) {
+                const xMin = parseFloat(xScale.min).toFixed(2);
+                const xMax = parseFloat(xScale.max).toFixed(2);
+                const yMin = parseFloat(yScale.min).toFixed(4);
+                const yMax = parseFloat(yScale.max).toFixed(4);
+                
+                zoomInfo.textContent = `X: [${xMin}, ${xMax}] | Y: [${yMin}, ${yMax}] | Use mouse wheel to zoom, drag to pan, Ctrl+drag to pan`;
+            }
+        }
+
+        function resetZoom(chartIndex) {
+            if (charts[chartIndex] && charts[chartIndex].chart) {
+                charts[chartIndex].chart.resetZoom();
+                const zoomInfo = document.getElementById(`zoom-info-${chartIndex}`);
+                if (zoomInfo) {
+                    zoomInfo.textContent = 'Use mouse wheel to zoom, drag to pan, Ctrl+drag to pan';
+                }
+            }
+        }
+
+        function buildTable() {
+            const table = document.getElementById('dataTable');
+            
+            let html = '<thead><tr>';
+            headers.forEach(h => {
+                html += `<th>${h.replace(/_/g, ' ')}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            
+            data.forEach(row => {
+                html += '<tr>';
+                headers.forEach(h => {
+                    html += `<td>${row[h].toFixed(4)}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody>';
+            
+            table.innerHTML = html;
+        }
+
+        function buildSummary() {
+            const container = document.getElementById('summaryGrid');
+            const groups = groupParameters();
+            
+            let html = '';
+            Object.keys(groups).forEach(baseName => {
+                const group = groups[baseName];
+                
+                html += `<div class="summary-card">
+                    <h3>${baseName.replace(/_/g, ' ')}</h3>`;
+                
+                ['setpoint', 'physical', 'measured'].forEach(type => {
+                    if (group[type]) {
+                        const values = data.map(d => d[group[type]]);
+                        const max = Math.max(...values);
+                        const min = Math.min(...values);
+                        const avg = values.reduce((a, b) => a + b, 0) / values.length;
+                        const final = values[values.length - 1];
+                        
+                        html += `
+                            <div style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                                <strong style="color: #667eea; text-transform: capitalize;">${type}</strong>
+                                <div class="metric">
+                                    <span class="label">Average:</span>
+                                    <span class="value">${avg.toFixed(4)}</span>
+                                </div>
+                                <div class="metric">
+                                    <span class="label">Final:</span>
+                                    <span class="value">${final.toFixed(4)}</span>
+                                </div>
+                                <div class="metric">
+                                    <span class="label">Max:</span>
+                                    <span class="value">${max.toFixed(4)}</span>
+                                </div>
+                                <div class="metric">
+                                    <span class="label">Min:</span>
+                                    <span class="value">${min.toFixed(4)}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+                
+                html += '</div>';
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function exportCharts() {
+            charts.forEach(({ chart, baseName }) => {
+                const url = chart.toBase64Image();
+                const link = document.createElement('a');
+                link.download = `${baseName}.png`;
+                link.href = url;
+                link.click();
+            });
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tab + 'Tab').classList.add('active');
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('fileStatus').textContent = 'Please select a CSV file to begin';
+            document.getElementById('fileStatus').style.color = '#6c757d';
+        });
+    </script>
+</body>
+</html>
