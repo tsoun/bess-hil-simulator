@@ -1,15 +1,47 @@
 # BESS HIL Simulator
 
-
-
-[Image of signal flow schematic]
-
+![BESS HIL Architecture](./imgs/HIL.png)
 
 ## Overview
 
 This repository contains a **Hardware-in-the-Loop (HIL) Simulator** designed for testing and validating Energy Management Systems (EMS) software. The simulator acts as a digital twin of a Power Conversion System (PCS) and Battery Energy Storage System (BESS), modeling the physical dynamics, grid coupling, and communication latencies.
 
 It allows an external EMS to read telemetry and write setpoints via **Modbus TCP**, while the simulator runs a real-time physics engine internally.
+
+## Simulation Results
+
+The following plots demonstrate the simulator's behavior using a **Sungrow ST5015UX PCS-ESU** model with the configuration:
+- **Sampling Time**: 100ms
+- **Measurement Latency**: 500ms  
+- **P Time Constant**: 0.1s
+- **Q Time Constant**: 0.2s
+- **Max Apparent Power**: 0.21 MVA
+
+### Power Response Characteristics
+
+*Active Power (P) tracking setpoint with first-order lag dynamics*
+![Active Power Response](./imgs/P_MW.png)
+
+
+*Reactive Power (Q) response showing similar lag characteristics*
+![Reactive Power Response](./imgs/Q_MVAR.png) 
+
+### Grid Parameters & Derived Measurements
+
+*Grid voltage profile during simulation*
+![Grid Voltage](./imgs/V_pu.png)
+
+
+*System frequency measurements*
+![Grid Frequency](./imgs/F_Hz.png)
+
+
+*Resulting power factor calculated from P and Q measurements*
+![Power Factor](./imgs/PF.png)
+
+
+*Calculated current injected to/absorpted by the grid*
+![System Overview](./imgs/I_kA.png)
 
 ## Features
 
@@ -34,14 +66,14 @@ The system uses a discrete-time state-space representation.
 The state vector represents the physical state of the plant at the inverter terminals:
 
 $$
-x(k) = \begin{bmatrix} P_{phys}(k) \\ Q_{phys}(k) \\ V_{grid}(k) \\ f_{grid}(k) \end{bmatrix}
+x(k) = \begin{bmatrix} P_{phys}(k) \\ Q_{phys}(k) \\ V_{grid}(k) \\ f_{grid}(k) \end{bmatrix}^T
 $$
 
 #### 2. Input Vector ($u$)
 The input vector consists of the setpoints received from the EMS:
 
 $$
-u(k) = \begin{bmatrix} P_{setpoint}(k) \\ Q_{setpoint}(k) \end{bmatrix}
+u(k) = \begin{bmatrix} P_{setpoint}(k) \\ Q_{setpoint}(k) \end{bmatrix}^T
 $$
 
 #### 3. State Evolution Equation
@@ -97,7 +129,7 @@ f_{meas}(k) \\
 I_{meas}(k)
 \end{bmatrix} = \mathcal{H}(x(k-N))$$
 
-Where current $I_{meas}$ is derived non-linearly as $I_{meas} = \frac{\sqrt{P^2 + Q^2}}{V}$.
+Where current $I_{meas}$ is derived non-linearly as $I_{meas} = \frac{\sqrt{P_{meas}^2 + Q_{meas}^2}}{V_{meas}}$.
 
 ## Project Structure
 
