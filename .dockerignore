@@ -1,0 +1,9 @@
+.git
+.vs
+.vscode
+bin
+obj
+Dockerfile
+README.md
+imgs
+BessData.csv
