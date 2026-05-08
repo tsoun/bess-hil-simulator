@@ -14,6 +14,8 @@ RUN dotnet publish TestingSimulator.csproj \
 FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
 WORKDIR /app
 
+ENV BESS_HIL_CONSOLE=false
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libcap2-bin \
     && rm -rf /var/lib/apt/lists/* \
