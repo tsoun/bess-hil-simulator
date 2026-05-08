@@ -9,13 +9,25 @@ namespace BessHilSimulator
     {
         // Discrete-time filter coefficients (Z-domain)
         private readonly double _ad_p, _bd_p, _ad_q, _bd_q;
-        
+
         // Inverter capability
         private readonly double _maxApparentPower;
         private readonly PqCapabilityCurve _capabilityCurve;
-        
+
         // Measurement latency (N steps)
         private readonly int _delaySteps;
+
+        // Tick length (s) — also used by the SOC integrator below.
+        private readonly double _tickSeconds;
+
+        // BESS energy state. Capacity in MWh, SOC in 0..100 %.
+        private readonly double _capacityMwh;
+        private double _socPercent;
+
+        // Static placeholders for SOH and temperature so the EMS gets
+        // valid-shaped BMS telemetry until a richer model lands.
+        private const double SohPercent = 100.0;
+        private const double TempCelsius = 22.0;
 
         // Internal states (Previous output y[k-1])
         private double P_physical = 0.0;
@@ -27,21 +39,28 @@ namespace BessHilSimulator
         private Queue<double> _bufferV;
         private Queue<double> _bufferF;
 
-        public BessPhysicsModel(double tickSeconds, double lagSecondsP, double lagSecondsQ, double delaySeconds, double maxMva)
+        public BessPhysicsModel(
+            double tickSeconds, double lagSecondsP, double lagSecondsQ,
+            double delaySeconds, double maxMva,
+            double capacityMwh = 0.21, double initialSocPercent = 50.0)
         {
             // Calculate discrete coefficients for 1st order Low Pass Filter
             _ad_p = Math.Exp(-tickSeconds / lagSecondsP); _bd_p = 1.0 - _ad_p;
             _ad_q = Math.Exp(-tickSeconds / lagSecondsQ); _bd_q = 1.0 - _ad_q;
-            
+
             _maxApparentPower = maxMva;
             _capabilityCurve = new PqCapabilityCurve();
             _delaySteps = (int)(delaySeconds / tickSeconds);
+            _tickSeconds = tickSeconds;
+
+            _capacityMwh = capacityMwh;
+            _socPercent = Math.Clamp(initialSocPercent, 0.0, 100.0);
 
             // Initialize delay lines with steady-state zeros
             _bufferP = new Queue<double>(Enumerable.Repeat(0.0, _delaySteps));
             _bufferQ = new Queue<double>(Enumerable.Repeat(0.0, _delaySteps));
             _bufferV = new Queue<double>(Enumerable.Repeat(1.0, _delaySteps));
-            _bufferF = new Queue<double>(Enumerable.Repeat(50.0, _delaySteps)); 
+            _bufferF = new Queue<double>(Enumerable.Repeat(50.0, _delaySteps));
         }
 
         public PlantOutput Step(double uP, double uQ, double distV, double distF, double time)
@@ -76,9 +95,25 @@ namespace BessHilSimulator
 
             // 3. Physics Evolution (Infinite Impulse Response - IIR Filter)
             P_physical = (_ad_p * P_physical) + (_bd_p * uP);
-            P_physical = Math.Round(P_physical, 6); 
+            P_physical = Math.Round(P_physical, 6);
             Q_physical = (_ad_q * Q_physical) + (_bd_q * uQ);
             Q_physical = Math.Round(Q_physical, 6);
+
+            // 3a. SOC integration (after the IIR step so the energy
+            // bookkeeping uses the freshly updated physical power):
+            // discharge (P > 0) drains the battery, charge (P < 0)
+            // refills it. Energy this tick = P[MW] * Ts[s] / 3600
+            // gives MWh; divided by capacity in MWh and scaled to %
+            // SOC produces the per-step delta. SOC is clamped to
+            // 0..100 — when the battery hits an end stop the EMS
+            // sees a flat plateau and SOC-MIN / SOC-MAX safety
+            // logic in the consumer takes over.
+            if (_capacityMwh > 0.0)
+            {
+                double energyStepMwh = P_physical * _tickSeconds / 3600.0;
+                _socPercent -= (energyStepMwh / _capacityMwh) * 100.0;
+                _socPercent = Math.Clamp(_socPercent, 0.0, 100.0);
+            }
 
             // 4. Apply Measurement/Transport Delay
             _bufferP.Enqueue(physP_now);
@@ -103,7 +138,9 @@ namespace BessHilSimulator
                 SetpointP = uP, SetpointQ = uQ,
                 PhysP = physP_now, PhysQ = physQ_now, PhysPF = physPF, PhysV = physV_now, PhysF = physF_now, PhysI = physI,
                 MeasP = yP, MeasQ = yQ, MeasPF = yPF, MeasV = yV, MeasF = yF, MeasI = yI,
-                MaxQ = maxQ, MinQ = minQ
+                MaxQ = maxQ, MinQ = minQ,
+                Soc = _socPercent, Soh = SohPercent,
+                Available = 1.0, TempCelsius = TempCelsius,
             };
         }
     }

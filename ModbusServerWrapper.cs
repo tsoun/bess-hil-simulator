@@ -51,6 +51,13 @@ namespace BessHilSimulator
             WriteInputFloat(4, (float)y.MeasV);
             WriteInputFloat(6, (float)y.MeasF);
             WriteInputFloat(8, (float)y.MeasI);
+            // BESS state registers for closed-loop EMS demos. Logical
+            // addresses 10/12/14/16; clients see them at WIRE
+            // addresses 11/13/15/17 due to the +1 DataStore offset.
+            WriteInputFloat(10, (float)y.Available);
+            WriteInputFloat(12, (float)y.Soc);
+            WriteInputFloat(14, (float)y.Soh);
+            WriteInputFloat(16, (float)y.TempCelsius);
         }
 
         // Call this to check if Client sent new commands (Holding Registers)
