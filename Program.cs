@@ -19,9 +19,9 @@ namespace BessHilSimulator
         public double PhysP;
         public double PhysQ;
         public double PhysPF;
-        public double PhysV;  
-        public double PhysF;  
-        public double PhysI; 
+        public double PhysV;
+        public double PhysF;
+        public double PhysI;
 
         // --- SCADA/Meter Feedback (y[k]) ---
         public double MeasP;
@@ -30,10 +30,21 @@ namespace BessHilSimulator
         public double MeasV;
         public double MeasF;
         public double MeasI;
-        
+
         // --- Capability Limits ---
         public double MaxQ;
         public double MinQ;
+
+        // --- BESS state for closed-loop EMS demos ---
+        // Soc: integrated state of charge (0..100 %), reduced by
+        // discharge (P > 0) and increased by charge (P < 0).
+        // Soh: state of health (0..100 %); static 100 today.
+        // Available: 1.0 = inverter ready to dispatch, 0.0 = down.
+        // TempCelsius: cell-temperature placeholder (static).
+        public double Soc;
+        public double Soh;
+        public double Available;
+        public double TempCelsius;
     }
 
     // Command structure for incoming setpoints
@@ -86,6 +97,7 @@ namespace BessHilSimulator
         static void Main(string[] args)
         {
             string csvFilePath = "BessData.csv";
+            bool consoleInputEnabled = ShouldStartConsoleInput(args);
             
             // Simulation Parameters
             double Ts = 0.1;      // Sampling Time (100ms)
@@ -100,7 +112,14 @@ namespace BessHilSimulator
             ModbusServerWrapper.Start(502); 
 
             Console.WriteLine($"Writing data to: {Path.GetFullPath(csvFilePath)}");
-            Console.WriteLine("Commands: P[MW] Q[MVAR] (e.g., '1.0 0.5') or 'exit' to quit");
+            if (consoleInputEnabled)
+            {
+                Console.WriteLine("Commands: P[MW] Q[MVAR] (e.g., '1.0 0.5') or 'exit' to quit");
+            }
+            else
+            {
+                Console.WriteLine("Console input disabled. Use Modbus for setpoints.");
+            }
             Console.WriteLine(new string('-', 190));
             
             Console.Write($"| {"Time",-5} |");
@@ -114,10 +133,13 @@ namespace BessHilSimulator
             Console.WriteLine($" {"P",6} {"Q",6} {"PF",5} {"V",5} {"F",4} {"I",6} |"); 
             Console.WriteLine(new string('-', 190));
 
-            // Start input thread
-            Thread inputThread = new Thread(ReadInput);
-            inputThread.IsBackground = true;
-            inputThread.Start();
+            if (consoleInputEnabled)
+            {
+                // Start input thread
+                Thread inputThread = new Thread(ReadInput);
+                inputThread.IsBackground = true;
+                inputThread.Start();
+            }
 
             double setpointP = 0.0;
             double setpointQ = 0.0;
@@ -177,6 +199,39 @@ namespace BessHilSimulator
             }
 
             Console.WriteLine("\nSimulation stopped.");
+        }
+
+        static bool ShouldStartConsoleInput(string[] args)
+        {
+            bool enabled = IsConsoleInputEnabledByEnvironment();
+
+            foreach (string arg in args)
+            {
+                if (string.Equals(arg, "--no-console", StringComparison.OrdinalIgnoreCase))
+                {
+                    enabled = false;
+                }
+                else if (string.Equals(arg, "--console", StringComparison.OrdinalIgnoreCase))
+                {
+                    enabled = true;
+                }
+            }
+
+            return enabled;
+        }
+
+        static bool IsConsoleInputEnabledByEnvironment()
+        {
+            string? value = Environment.GetEnvironmentVariable("BESS_HIL_CONSOLE");
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return true;
+            }
+
+            return !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(value, "0", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(value, "no", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(value, "off", StringComparison.OrdinalIgnoreCase);
         }
 
         static void ReadInput()

@@ -159,6 +159,30 @@ Run the application with administrative privileges (required to bind to Port 502
 
 > **Note:** If Port 502 is blocked or in use, modify `ModbusServerWrapper.Start(502)` in `Program.cs` to use port `5020`.
 
+### Running with Docker
+Build the container image from the repository root:
+
+    docker build -t bess-hil-simulator:local .
+
+Run the simulator in headless mode and expose the container's Modbus TCP port on
+host port `5020`:
+
+    mkdir -p data
+    docker run --rm --user "$(id -u):$(id -g)" -p 5020:502 -v "$PWD/data:/data" bess-hil-simulator:local
+
+The Docker image defaults to `BESS_HIL_CONSOLE=false`, so it does not start the
+interactive console input thread. To use console control in Docker, enable it and
+allocate a TTY:
+
+    docker run --rm -it --user "$(id -u):$(id -g)" -e BESS_HIL_CONSOLE=true -p 5020:502 -v "$PWD/data:/data" bess-hil-simulator:local
+
+The simulator writes `BessData.csv` to the mounted `data` directory and copies the
+default `pq-curves.json` there if it is missing. Use `-p 502:502` instead if the EMS
+must connect to the standard Modbus TCP port and your host allows binding to port 502.
+
+Open `viewer.html` locally and select `data/BessData.csv` with **Load CSV File** to
+inspect the generated log.
+
 ## Usage
 
 ### 1. Console Control
@@ -168,6 +192,13 @@ You can manually inject setpoints directly via the console window to test step r
 
     Enter command (P Q) or 'exit': 1.0 0.5
     >>> Command queued: P=1.00 MW, Q=0.50 MVAR
+
+Disable console input for headless Modbus-only runs with either option:
+
+    dotnet run -- --no-console
+    BESS_HIL_CONSOLE=false dotnet run
+
+When console input is disabled, the simulator does not start the `ReadInput` thread.
 
 ### 2. Modbus Interface (EMS Connection)
 The simulator listens on **Port 502** (Unit ID 1). Data is stored as **32-bit Floating Point** values (spanning 2 registers each).
@@ -185,7 +216,7 @@ The simulator listens on **Port 502** (Unit ID 1). Data is stored as **32-bit Fl
 ### 3. Data Visualization
 1.  Let the simulation run; it logs data to `BessData.csv` in real-time.
 2.  Open `viewer.html` in your browser.
-3.  Click **Load CSV File** and select the generated `BessData.csv`.
+3.  Click **Load CSV File** and select the generated `BessData.csv` or `data/BessData.csv` when running with Docker.
 4.  Use the tabs to view **Charts**, **Summary Stats**, and **Data Tables**.
 
 ## Configuration
