@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -10,6 +10,12 @@
   <ItemGroup>
     <PackageReference Include="NModbus" Version="3.0.81" />
     <PackageReference Include="ScottPlot" Version="5.1.57" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="TestingSimulator.Tests\**" />
+    <EmbeddedResource Remove="TestingSimulator.Tests\**" />
+    <None Remove="TestingSimulator.Tests\**" />
   </ItemGroup>
 
 </Project>
