@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace BessHilSimulator
 {
-     // Simulates Inverter Dynamics: 1st Order Lag + Transport Delay + Saturation
+    // Simulates Inverter Dynamics: 1st Order Lag + Transport Delay + Saturation
     public class BessPhysicsModel
     {
         // Discrete-time filter coefficients (Z-domain)
@@ -24,6 +24,18 @@ namespace BessHilSimulator
         private readonly double _capacityMwh;
         private double _socPercent;
 
+        // SOC derating thresholds.
+        // Below _socDischargeFloor: injection (discharge) is hard-blocked.
+        // Above _socChargeCeiling: absorption (charge) tapers linearly to zero at 100 %.
+        private readonly double _socDischargeFloor;
+        private readonly double _socChargeCeiling;
+
+        // One-way efficiencies for the SOC integrator.
+        // Discharge η: more energy leaves the battery than the inverter delivers.
+        // Charge η: less energy enters the battery than the inverter absorbs.
+        private readonly double _chargeEfficiency;
+        private readonly double _dischargeEfficiency;
+
         // Static placeholders for SOH and temperature so the EMS gets
         // valid-shaped BMS telemetry until a richer model lands.
         private const double SohPercent = 100.0;
@@ -42,7 +54,9 @@ namespace BessHilSimulator
         public BessPhysicsModel(
             double tickSeconds, double lagSecondsP, double lagSecondsQ,
             double delaySeconds, double maxMva,
-            double capacityMwh = 0.21, double initialSocPercent = 50.0)
+            double capacityMwh = 0.21, double initialSocPercent = 50.0,
+            double socDischargeFloor = 5.0, double socChargeCeiling = 95.0,
+            double chargeEfficiency = 0.97, double dischargeEfficiency = 0.97)
         {
             // Calculate discrete coefficients for 1st order Low Pass Filter
             _ad_p = Math.Exp(-tickSeconds / lagSecondsP); _bd_p = 1.0 - _ad_p;
@@ -56,6 +70,13 @@ namespace BessHilSimulator
             _capacityMwh = capacityMwh;
             _socPercent = Math.Clamp(initialSocPercent, 0.0, 100.0);
 
+            _socDischargeFloor = Math.Clamp(socDischargeFloor, 0.0, 100.0);
+            _socChargeCeiling  = Math.Clamp(socChargeCeiling, _socDischargeFloor, 100.0);
+
+            // Clamp efficiencies to a physically plausible range (50 %–100 %)
+            _chargeEfficiency    = Math.Clamp(chargeEfficiency,    0.5, 1.0);
+            _dischargeEfficiency = Math.Clamp(dischargeEfficiency, 0.5, 1.0);
+
             // Initialize delay lines with steady-state zeros
             _bufferP = new Queue<double>(Enumerable.Repeat(0.0, _delaySteps));
             _bufferQ = new Queue<double>(Enumerable.Repeat(0.0, _delaySteps));
@@ -63,8 +84,42 @@ namespace BessHilSimulator
             _bufferF = new Queue<double>(Enumerable.Repeat(50.0, _delaySteps));
         }
 
+        // Returns value if finite, otherwise returns fallback.
+        private static double Sanitize(double value, double fallback = 0.0)
+            => double.IsFinite(value) ? value : fallback;
+
+        // Hard zero below the discharge floor; full rated power above it.
+        private double GetMaxInjection(double soc)
+            => soc <= _socDischargeFloor ? 0.0 : _maxApparentPower;
+
+        // Linear taper from full at _socChargeCeiling down to zero at 100 %.
+        private double GetMaxAbsorption(double soc)
+        {
+            if (soc >= 100.0)              return 0.0;
+            if (soc <= _socChargeCeiling)  return _maxApparentPower;
+            double ratio = (soc - _socChargeCeiling) / (100.0 - _socChargeCeiling);
+            return _maxApparentPower * (1.0 - ratio);
+        }
+
         public PlantOutput Step(double uP, double uQ, double distV, double distF, double time)
         {
+            // 0. Sanitize all inputs — reject NaN / ±Infinity from EMS or scenario generator.
+            uP    = Sanitize(uP);
+            uQ    = Sanitize(uQ);
+            distV = Math.Clamp(Sanitize(distV, 1.0), 0.5, 1.5);   // pu: outside [0.5, 1.5] is unphysical
+            distF = Math.Clamp(Sanitize(distF, 50.0), 45.0, 55.0); // Hz: ±5 Hz covers any credible grid event
+
+            // Clamp raw setpoints to the inverter's apparent power rating before any other limiting.
+            uP = Math.Clamp(uP, -_maxApparentPower, _maxApparentPower);
+            uQ = Math.Clamp(uQ, -_maxApparentPower, _maxApparentPower);
+
+            // SOC-based power derating applied before the P-Q capability curve.
+            // Injection (P > 0): hard zero below _socDischargeFloor.
+            // Absorption (P < 0): linearly derated above _socChargeCeiling.
+            double maxInj = GetMaxInjection(_socPercent);
+            double maxAbs = GetMaxAbsorption(_socPercent);
+            uP = Math.Clamp(uP, -maxAbs, maxInj);
+
             // 1. Capture State at t=k (Pre-update)
             double physP_now = P_physical;
             double physQ_now = Q_physical;
@@ -75,15 +130,14 @@ namespace BessHilSimulator
             double physS = Math.Sqrt(physP_now * physP_now + physQ_now * physQ_now);
             double physI = (physV_now > 0.001) ? physS / physV_now : 0.0;
             double physPF = (physS > 0.001) ? Math.Abs(physP_now) / physS : 1.0;
-            if (physP_now < 0) physPF = -physPF; // Negative for generation
+            if (physP_now < 0) physPF = -physPF;
 
             // 2. Apply P-Q Capability Curve Saturation
-            // var (maxQ, minQ) = _capabilityCurve.GetReactiveLimits(physV_now, uP, _maxApparentPower);
             var (maxQ, minQ) = _capabilityCurve.GetInterpolatedReactiveLimits(physV_now, uP, _maxApparentPower);
 
             // Clamp Q to capability limits
             uQ = Math.Max(minQ, Math.Min(maxQ, uQ));
-            
+
             // Also ensure apparent power doesn't exceed maximum
             double apparentPower = Math.Sqrt(uP * uP + uQ * uQ);
             if (apparentPower > _maxApparentPower)
@@ -99,18 +153,19 @@ namespace BessHilSimulator
             Q_physical = (_ad_q * Q_physical) + (_bd_q * uQ);
             Q_physical = Math.Round(Q_physical, 6);
 
-            // 3a. SOC integration (after the IIR step so the energy
-            // bookkeeping uses the freshly updated physical power):
-            // discharge (P > 0) drains the battery, charge (P < 0)
-            // refills it. Energy this tick = P[MW] * Ts[s] / 3600
-            // gives MWh; divided by capacity in MWh and scaled to %
-            // SOC produces the per-step delta. SOC is clamped to
-            // 0..100 — when the battery hits an end stop the EMS
-            // sees a flat plateau and SOC-MIN / SOC-MAX safety
-            // logic in the consumer takes over.
+            // Guard against numerical blow-up corrupting the internal state.
+            if (!double.IsFinite(P_physical)) P_physical = 0.0;
+            if (!double.IsFinite(Q_physical)) Q_physical = 0.0;
+
+            // 3a. SOC integration with one-way efficiency.
+            // Discharge (P > 0): the battery must release P/η_d energy to deliver P at the inverter terminals.
+            // Charge   (P < 0): the battery only stores |P|·η_c of the energy absorbed at the AC side.
             if (_capacityMwh > 0.0)
             {
-                double energyStepMwh = P_physical * _tickSeconds / 3600.0;
+                double energyStepMwh = P_physical >= 0.0
+                    ? P_physical * _tickSeconds / (3600.0 * _dischargeEfficiency)
+                    : P_physical * _chargeEfficiency * _tickSeconds / 3600.0;
+
                 _socPercent -= (energyStepMwh / _capacityMwh) * 100.0;
                 _socPercent = Math.Clamp(_socPercent, 0.0, 100.0);
             }
@@ -144,5 +199,4 @@ namespace BessHilSimulator
             };
         }
     }
-
 }

@@ -118,7 +118,7 @@ f_{grid}^{*(k)}
 $$
 
 #### 4. Output Vector ($y$)
-To simulate realistic SCADA feedback, a transport delay $N = T_{delay} / T_s$ is applied to the physical states. The output seen by the EMS is:
+To simulate realistic SCADA feedback, a transport delay $N = T_{delay} / T_s$ is applied to the physical states. The output seen by the EMS includes additional BESS state parameters:
 
 $$y(k) = \begin{bmatrix} 
 P_{meas}(k) \\
@@ -126,10 +126,31 @@ Q_{meas}(k) \\
 PF_{meas}(k) \\
 V_{meas}(k) \\
 f_{meas}(k) \\
-I_{meas}(k)
-\end{bmatrix} = \mathcal{H}(x(k-N))$$
+I_{meas}(k) \\
+Avail_{meas}(k) \\
+SOC_{meas}(k) \\
+SOH_{meas}(k) \\
+Temp_{meas}(k)
+\end{bmatrix} = \mathcal{H}(x_{extended}(k-N))$$
 
 Where current $I_{meas}$ is derived non-linearly as $I_{meas} = \frac{\sqrt{P_{meas}^2 + Q_{meas}^2}}{V_{meas}}$.
+
+#### 5. State of Charge (SOC) Dynamics & Derating
+The State of Charge ($SOC$) is integrated at each step using the active power state ($P_{phys}$) and charge/discharge efficiencies:
+
+$$SOC(k+1) = SOC(k) - \frac{\Delta E(k)}{E_{max}} \times 100\%$$
+
+Where the energy step $\Delta E(k)$ (in MWh) accounts for one-way efficiency:
+
+$$\Delta E(k) = \begin{cases} 
+\frac{P_{phys}(k) T_s}{3600 \eta_d} & \text{if } P_{phys}(k) \ge 0 \text{ (Discharge)} \\
+P_{phys}(k) T_s \eta_c / 3600 & \text{if } P_{phys}(k) < 0 \text{ (Charge)}
+\end{cases}$$
+
+To protect the battery, active power commands are clamped prior to the P-Q capability curve based on the current $SOC$:
+- **Discharging (Injection, $P > 0$)**: Clamped to 0 if $SOC \le SOC_{floor}$.
+- **Charging (Absorption, $P < 0$)**: Tapered linearly to 0 once $SOC > SOC_{ceiling}$:
+  $$P_{max\_abs} = S_{max} \times \left(1 - \frac{SOC - SOC_{ceiling}}{100 - SOC_{ceiling}}\right)$$
 
 ## Project Structure
 
@@ -212,6 +233,10 @@ The simulator listens on **Port 502** (Unit ID 1). Data is stored as **32-bit Fl
 | **Meas V** | Float (32-bit) | Input (RO) | 30005 (4) | Grid Voltage |
 | **Meas F** | Float (32-bit) | Input (RO) | 30007 (6) | Grid Frequency |
 | **Meas I** | Float (32-bit) | Input (RO) | 30009 (8) | Current (Derived) |
+| **Available** | Float (32-bit) | Input (RO) | 30011 (10) | Ready State (1.0 = Available, 0.0 = Down) |
+| **Meas SOC** | Float (32-bit) | Input (RO) | 30013 (12) | State of Charge (%) |
+| **Meas SOH** | Float (32-bit) | Input (RO) | 30015 (14) | State of Health (%) |
+| **Meas Temp** | Float (32-bit) | Input (RO) | 30017 (16) | Cell Temperature (°C) |
 
 ### 3. Data Visualization
 1.  Let the simulation run; it logs data to `BessData.csv` in real-time.
@@ -230,3 +255,8 @@ Key simulation parameters are defined in `Program.cs` and derived from the syste
 | **P Time Constant ($\tau_P$)** | 0.1 s | Active Power Response Lag |
 | **Q Time Constant ($\tau_Q$)** | 0.2 s | Reactive Power Response Lag |
 | **Max Apparent Power ($S_{max}$)** | 0.21 MVA | Inverter Capacity Limit |
+| **Battery Capacity ($E_{max}$)** | 0.21 MWh | Simulated Battery Storage Capacity |
+| **SOC Discharge Floor ($SOC_{floor}$)** | 5.0 % | SOC threshold below which discharge is blocked |
+| **SOC Charge Ceiling ($SOC_{ceiling}$)** | 95.0 % | SOC threshold above which charge limits taper |
+| **Charge Efficiency ($\eta_c$)** | 97.0 % | Efficiency parameter for charging |
+| **Discharge Efficiency ($\eta_d$)** | 97.0 % | Efficiency parameter for discharging |
