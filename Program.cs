@@ -105,7 +105,7 @@ namespace BessHilSimulator
 
         static void RunCsvSimulation(string inputPath, string outputPath)
         {
-            Console.WriteLine("=== BESS SIMULATOR: OFFLINE CSV SIMULATION MODE ===");
+            Console.WriteLine("=== BESS SIMULATOR: OFFLINE BATCH VALIDATION MODE ===");
             Console.WriteLine($"Reading from input CSV: {inputPath}");
             if (!File.Exists(inputPath))
             {
@@ -224,6 +224,7 @@ namespace BessHilSimulator
         {
             string? inputCsvPath = null;
             string outputCsvPath = Path.Combine("output", "BessData_sim.csv");
+            bool validationMode = false;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -235,10 +236,25 @@ namespace BessHilSimulator
                 {
                     outputCsvPath = args[i + 1];
                 }
+                else if (args[i] == "--validation")
+                {
+                    validationMode = true;
+                }
+                else if (args[i] == "--mode" && i + 1 < args.Length)
+                {
+                    if (string.Equals(args[i + 1], "validation", StringComparison.OrdinalIgnoreCase))
+                    {
+                        validationMode = true;
+                    }
+                }
             }
 
-            if (!string.IsNullOrEmpty(inputCsvPath))
+            if (validationMode || !string.IsNullOrEmpty(inputCsvPath))
             {
+                if (string.IsNullOrEmpty(inputCsvPath))
+                {
+                    inputCsvPath = "input_profile.csv";
+                }
                 RunCsvSimulation(inputCsvPath, outputCsvPath);
                 return;
             }
