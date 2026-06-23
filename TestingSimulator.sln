@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestingSimulator", "Testing
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestingSimulator.Tests", "TestingSimulator.Tests\TestingSimulator.Tests.csproj", "{D1AF2471-04DF-4DA0-80FE-8F4263FE3518}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BessDashboard", "BessDashboard\BessDashboard.csproj", "{E27BA1BC-00BB-4B2D-9BA0-F9D3EDEDE903}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,6 +22,10 @@ Global
 		{D1AF2471-04DF-4DA0-80FE-8F4263FE3518}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D1AF2471-04DF-4DA0-80FE-8F4263FE3518}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D1AF2471-04DF-4DA0-80FE-8F4263FE3518}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E27BA1BC-00BB-4B2D-9BA0-F9D3EDEDE903}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E27BA1BC-00BB-4B2D-9BA0-F9D3EDEDE903}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E27BA1BC-00BB-4B2D-9BA0-F9D3EDEDE903}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E27BA1BC-00BB-4B2D-9BA0-F9D3EDEDE903}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

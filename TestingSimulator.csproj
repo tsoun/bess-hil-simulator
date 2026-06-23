@@ -16,6 +16,9 @@
     <Compile Remove="TestingSimulator.Tests\**" />
     <EmbeddedResource Remove="TestingSimulator.Tests\**" />
     <None Remove="TestingSimulator.Tests\**" />
+    <Compile Remove="BessDashboard\**" />
+    <EmbeddedResource Remove="BessDashboard\**" />
+    <None Remove="BessDashboard\**" />
   </ItemGroup>
 
 </Project>
