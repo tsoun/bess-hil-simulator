@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
@@ -88,14 +88,161 @@ namespace BessHilSimulator
         public bool HasPendingCommands => _commandQueue.Count > 0;
     }
 
+    public class InputRow
+    {
+        public double Time { get; set; }
+        public double SetpointP { get; set; }
+        public double SetpointQ { get; set; }
+        public double GridV { get; set; } = 1.0;
+        public double GridF { get; set; } = 50.0;
+    }
+
     class Program
     {
         private static bool _running = true;
         private static CommandHandler _commandHandler = new CommandHandler();
         private static double _currentTime = 0.0;
-        
+
+        static void RunCsvSimulation(string inputPath, string outputPath)
+        {
+            Console.WriteLine("=== BESS SIMULATOR: OFFLINE CSV SIMULATION MODE ===");
+            Console.WriteLine($"Reading from input CSV: {inputPath}");
+            if (!File.Exists(inputPath))
+            {
+                Console.WriteLine($"Error: Input file {inputPath} does not exist.");
+                return;
+            }
+
+            var rows = new List<InputRow>();
+            string[] lines = File.ReadAllLines(inputPath);
+            
+            // Identify header positions
+            int timeIdx = -1, pIdx = -1, qIdx = -1, vIdx = -1, fIdx = -1;
+            if (lines.Length > 0)
+            {
+                string[] headers = lines[0].Split(',');
+                for (int i = 0; i < headers.Length; i++)
+                {
+                    string h = headers[i].Trim().ToLower();
+                    if (h.StartsWith("time")) timeIdx = i;
+                    else if (h.Contains("setp") || h.Contains("active")) pIdx = i;
+                    else if (h.Contains("setq") || h.Contains("reactive")) qIdx = i;
+                    else if (h.Contains("gridv") || h.Contains("voltage")) vIdx = i;
+                    else if (h.Contains("gridf") || h.Contains("frequency")) fIdx = i;
+                }
+            }
+
+            // Fallback to position-based indexing if headers are not recognized
+            if (timeIdx == -1) timeIdx = 0;
+            if (pIdx == -1) pIdx = 1;
+            if (qIdx == -1) qIdx = 2;
+            if (vIdx == -1) vIdx = 3;
+            if (fIdx == -1) fIdx = 4;
+
+            for (int i = 1; i < lines.Length; i++)
+            {
+                string line = lines[i].Trim();
+                if (string.IsNullOrEmpty(line)) continue;
+                
+                string[] parts = line.Split(',');
+                if (parts.Length <= Math.Max(timeIdx, Math.Max(pIdx, qIdx))) continue;
+
+                try
+                {
+                    var row = new InputRow();
+                    row.Time = double.Parse(parts[timeIdx]);
+                    row.SetpointP = double.Parse(parts[pIdx]);
+                    row.SetpointQ = double.Parse(parts[qIdx]);
+                    
+                    if (vIdx < parts.Length && double.TryParse(parts[vIdx], out double v))
+                    {
+                        row.GridV = v;
+                    }
+                    if (fIdx < parts.Length && double.TryParse(parts[fIdx], out double f))
+                    {
+                        row.GridF = f;
+                    }
+                    rows.Add(row);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Warning: Could not parse line {i + 1}: {ex.Message}");
+                }
+            }
+
+            if (rows.Count == 0)
+            {
+                Console.WriteLine("Error: No valid simulation rows found in CSV.");
+                return;
+            }
+
+            // Determine time step Ts (difference between consecutive timestamps)
+            double Ts = 0.1;
+            if (rows.Count > 1)
+            {
+                Ts = rows[1].Time - rows[0].Time;
+                if (Ts <= 0.0) Ts = 0.1;
+            }
+
+            Console.WriteLine($"Detected simulation step size (Ts) = {Ts} seconds. Total steps = {rows.Count}.");
+
+            // Initialize Model
+            double Tdelay = 0.5; // SCADA delay (seconds)
+            var plant = new BessPhysicsModel(Ts, 0.2, 0.1, Tdelay, 0.21);
+
+            // Ensure output directory exists
+            string? outputDir = Path.GetDirectoryName(outputPath);
+            if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
+            {
+                Directory.CreateDirectory(outputDir);
+            }
+
+            Console.WriteLine($"Writing simulation results to: {outputPath}");
+
+            using (StreamWriter writer = new StreamWriter(outputPath))
+            {
+                writer.WriteLine("Time_s,SetP_MW,SetQ_MVAR,PhysP_MW,PhysQ_MVAR,PhysPF,PhysV_pu,PhysF_Hz,PhysI_kA,MaxQ_MVAR,MinQ_MVAR,MeasP_MW,MeasQ_MVAR,MeasPF,MeasV_pu,MeasF_Hz,MeasI_kA,Soc,Soh,Available,TempCelsius");
+
+                foreach (var row in rows)
+                {
+                    var y = plant.Step(row.SetpointP, row.SetpointQ, row.GridV, row.GridF, row.Time);
+
+                    string csvLine = $"{y.Timestamp:F2},{y.SetpointP:F4},{y.SetpointQ:F4}," +
+                                     $"{y.PhysP:F4},{y.PhysQ:F4},{y.PhysPF:F4},{y.PhysV:F4},{y.PhysF:F2},{y.PhysI:F4}," +
+                                     $"{y.MaxQ:F4},{y.MinQ:F4}," +
+                                     $"{y.MeasP:F4},{y.MeasQ:F4},{y.MeasPF:F4},{y.MeasV:F4},{y.MeasF:F2},{y.MeasI:F4}," +
+                                     $"{y.Soc:F2},{y.Soh:F2},{y.Available:F1},{y.TempCelsius:F2}";
+                    
+                    writer.WriteLine(csvLine);
+                }
+            }
+
+            Console.WriteLine("Simulation completed successfully.");
+        }
+
         static void Main(string[] args)
         {
+            string? inputCsvPath = null;
+            string outputCsvPath = Path.Combine("output", "BessData_sim.csv");
+
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "--input" && i + 1 < args.Length)
+                {
+                    inputCsvPath = args[i + 1];
+                }
+                else if (args[i] == "--output" && i + 1 < args.Length)
+                {
+                    outputCsvPath = args[i + 1];
+                }
+            }
+
+            if (!string.IsNullOrEmpty(inputCsvPath))
+            {
+                RunCsvSimulation(inputCsvPath, outputCsvPath);
+                return;
+            }
+
             string csvFilePath = "BessData.csv";
             bool consoleInputEnabled = ShouldStartConsoleInput(args);
             
