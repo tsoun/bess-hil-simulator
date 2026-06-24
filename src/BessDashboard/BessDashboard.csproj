@@ -24,4 +24,9 @@
     <Content Include="..\..\input_profile.csv" Link="input_profile.csv" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="..\..\imgs\logo.png" Link="logo.png" />
+    <Resource Include="..\..\imgs\logo_long.png" Link="logo_long.png" />
+  </ItemGroup>
+
 </Project>
