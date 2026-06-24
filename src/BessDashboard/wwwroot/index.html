@@ -597,12 +597,147 @@ tr:hover td { background:var(--s2); }
   font-size:11px;
   color:var(--t3);
 }
+
+/* Mode Selection styling */
+.mode-select-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 120px);
+  padding: 20px;
+}
+.mode-select-header {
+  text-align: center;
+  margin-bottom: 40px;
+  max-width: 600px;
+}
+.select-logo {
+  height: 48px;
+  margin-bottom: 20px;
+}
+.mode-select-header h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--t1);
+  margin-bottom: 10px;
+  letter-spacing: -0.5px;
+}
+.mode-select-header p {
+  font-size: 14px;
+  color: var(--t2);
+  line-height: 1.6;
+}
+.mode-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 900px;
+  width: 100%;
+}
+@media (max-width: 768px) {
+  .mode-cards {
+    grid-template-columns: 1fr;
+  }
+}
+.mode-card {
+  background: var(--s1);
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  padding: 30px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.25s, transform 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.mode-card:hover {
+  border-color: var(--cyan);
+  transform: translateY(-2px);
+}
+.mode-card-badge {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: var(--s3);
+  color: var(--cyan);
+  border: 1px solid var(--cyan-dim);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 99px;
+  letter-spacing: 0.05em;
+}
+.mode-card-icon {
+  font-size: 32px;
+  margin-bottom: 16px;
+}
+.mode-card h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--t1);
+  margin-bottom: 10px;
+}
+.mode-card p {
+  font-size: 12.5px;
+  color: var(--t2);
+  line-height: 1.6;
+  margin-bottom: 24px;
+  flex-grow: 1;
+}
+.mode-card .btn {
+  width: 100%;
+  justify-content: center;
+  padding: 10px;
+}
+.diag-pill.diag-pill {
+  border-radius: 999px;
+}
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <!-- Status strip -->
+  <!-- Mode Selector Screen -->
+  <div id="modeSelector" class="mode-select-container">
+    <div class="mode-select-header">
+      <img src="logo_long.png" alt="Rener Energy Logo" class="select-logo" />
+      <h2>BESS Digital Twin System</h2>
+      <p>Select operation mode to initialize the Hardware-in-the-Loop simulation or physics validation suite.</p>
+    </div>
+    
+    <div class="mode-cards">
+      <!-- Card 1: HIL Mode -->
+      <div class="mode-card" id="cardHil">
+        <div class="mode-card-badge">LIVE</div>
+        <div class="mode-card-icon">⚡</div>
+        <h3>Real-Time HiL Mode</h3>
+        <p>Run the simulator in real-time. Hosts a Modbus TCP server (Port 502) to interface with external EMS controllers. Allows live interactive telemetry visualization and setpoint overrides.</p>
+        <button class="btn btn-primary" onclick="initHilMode()">Initialize HiL</button>
+      </div>
+
+      <!-- Card 2: Validation Mode -->
+      <div class="mode-card" id="cardValidation">
+        <div class="mode-card-badge">BATCH</div>
+        <div class="mode-card-icon">📋</div>
+        <h3>Validation Mode</h3>
+        <p>Upload a historical/test CSV profile of active and reactive power setpoints to benchmark model tracking accuracy, SCADA delays, and PQ capability curve constraints.</p>
+        <button class="btn btn-ghost" onclick="initValidationMode()">Open Validation</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashboardContent" class="hidden">
+    <!-- Header Back Button -->
+    <div style="margin-bottom: 15px;">
+      <button class="btn btn-ghost" onclick="backToMenu()" style="padding: 6px 12px; font-size: 11px;">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="15" y1="8" x2="1" y2="8"/><polyline points="8,1 1,8 8,15"/></svg>
+        Back to Mode Selection
+      </button>
+    </div>
+
+    <!-- Status strip -->
   <div class="status-strip">
     <div class="s-logo">
       <img src="logo_long.png" alt="Rener Energy" style="height:20px; display:block;" />
@@ -650,6 +785,31 @@ tr:hover td { background:var(--s2); }
     <textarea id="csvText" placeholder="Time_s,SetP_MW,SetQ_MVAR,GridV_pu,GridF_Hz&#10;0.0,0.0,0.0,1.0,50.0&#10;1.0,0.1,0.0,1.0,50.0"></textarea>
     <button class="btn btn-primary" id="btnRun">Run Simulation</button>
     <div class="error-msg hidden" id="errMsg"></div>
+  </div>
+
+  <!-- HIL Control Panel -->
+  <div class="input-panel hidden" id="hilControlPanel">
+    <div class="panel-title">HIL Controller Override</div>
+    <p class="panel-hint">Directly inject active and reactive power setpoints to override Modbus EMS commands.</p>
+    
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px; margin-bottom:15px;">
+      <!-- Active Power P -->
+      <div>
+        <label style="font-weight:600; color:var(--t2); display:block; margin-bottom:6px;">Active Power setpoint (Pset): <span id="valP" style="color:var(--cyan); font-family:var(--font-mono)">0.00</span> MW</label>
+        <input type="range" id="sliderP" min="-0.21" max="0.21" step="0.01" value="0" style="width:100%; accent-color:var(--cyan);" />
+      </div>
+      <!-- Reactive Power Q -->
+      <div>
+        <label style="font-weight:600; color:var(--t2); display:block; margin-bottom:6px;">Reactive Power setpoint (Qset): <span id="valQ" style="color:var(--cyan); font-family:var(--font-mono)">0.00</span> MVAR</label>
+        <input type="range" id="sliderQ" min="-0.21" max="0.21" step="0.01" value="0" style="width:100%; accent-color:var(--cyan);" />
+      </div>
+    </div>
+    
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-primary" id="btnApplySetpoint" onclick="applyHilSetpoints()">Apply Setpoints</button>
+      <button class="btn btn-ghost" id="btnResetSetpoint" onclick="resetHilSetpoints()">Reset Setpoints (0,0)</button>
+      <button class="btn btn-ghost" id="btnResetSimulation" onclick="resetHilSimulation()" style="border-color:rgba(248,113,113,0.3); color:var(--red);">Reset Model State</button>
+    </div>
   </div>
 
   <!-- Metric cards -->
@@ -835,12 +995,16 @@ tr:hover td { background:var(--s2); }
     <span id="footerStats"></span>
   </div>
 
-</div>
+  </div> <!-- End of #dashboardContent -->
+
+</div> <!-- End of .wrap -->
 
 <script>
 const $ = id => document.getElementById(id);
 
 let steps = [];
+let currentMode = null; // 'hil' or 'validation'
+let hilPollInterval = null;
 
 const btnToggle  = $('btnToggle');
 const btnReset   = $('btnReset');
@@ -1251,7 +1415,132 @@ function renderTable(steps) {
   }
 }
 
-loadDefault();
+// Setup slider input change listeners
+$('sliderP').addEventListener('input', e => {
+  $('valP').textContent = parseFloat(e.target.value).toFixed(2);
+});
+$('sliderQ').addEventListener('input', e => {
+  $('valQ').textContent = parseFloat(e.target.value).toFixed(2);
+});
+
+// Mode initialization functions
+function initHilMode() {
+  currentMode = 'hil';
+  $('modeSelector').classList.add('hidden');
+  $('dashboardContent').classList.remove('hidden');
+  $('hilControlPanel').classList.remove('hidden');
+  $('btnToggle').classList.add('hidden');
+  $('btnReset').classList.add('hidden');
+  
+  $('sliderP').value = 0.0;
+  $('sliderQ').value = 0.0;
+  $('valP').textContent = "0.00";
+  $('valQ').textContent = "0.00";
+
+  // Hide emptyState initially for HIL mode
+  $('emptyState').classList.add('hidden');
+
+  fetch('/api/hil/start', { method: 'POST' })
+    .then(res => res.json())
+    .then(data => {
+      console.log("HIL Mode started on port:", data.port);
+      startHilPolling();
+    })
+    .catch(e => {
+      console.error("Error starting HIL Mode:", e);
+      showErr("Failed to start HIL server.");
+    });
+}
+
+function initValidationMode() {
+  currentMode = 'validation';
+  $('modeSelector').classList.add('hidden');
+  $('dashboardContent').classList.remove('hidden');
+  $('hilControlPanel').classList.add('hidden');
+  $('btnToggle').classList.remove('hidden');
+  $('btnReset').classList.remove('hidden');
+  
+  // Show emptyState if no profile loaded yet, but loadDefault will immediately run to display the default profile
+  loadDefault();
+}
+
+function backToMenu() {
+  if (currentMode === 'hil') {
+    stopHilPolling();
+    fetch('/api/hil/stop', { method: 'POST' })
+      .then(() => console.log("HIL Server stopped"))
+      .catch(e => console.error("Error stopping HIL Server:", e));
+  }
+  
+  currentMode = null;
+  steps = [];
+  $('emptyState').classList.remove('hidden');
+  $('lastRun').classList.remove('show');
+  
+  $('dashboardContent').classList.add('hidden');
+  $('modeSelector').classList.remove('hidden');
+}
+
+function startHilPolling() {
+  stopHilPolling();
+  hilPollInterval = setInterval(pollHilData, 250); // poll at 4Hz
+}
+
+function stopHilPolling() {
+  if (hilPollInterval) {
+    clearInterval(hilPollInterval);
+    hilPollInterval = null;
+  }
+}
+
+function pollHilData() {
+  fetch('/api/hil/data')
+    .then(res => {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    })
+    .then(data => {
+      if (data.steps && data.steps.length > 0) {
+        render(data.steps);
+      }
+    })
+    .catch(e => {
+      console.error("Error polling HIL state:", e);
+    });
+}
+
+function applyHilSetpoints() {
+  const p = parseFloat($('sliderP').value);
+  const q = parseFloat($('sliderQ').value);
+  fetch(`/api/hil/setpoint?p=${p}&q=${q}`, { method: 'POST' })
+    .then(res => res.json())
+    .then(data => {
+      console.log("Setpoints applied successfully:", data);
+    })
+    .catch(e => console.error("Failed to apply setpoints:", e));
+}
+
+function resetHilSetpoints() {
+  $('sliderP').value = 0.0;
+  $('sliderQ').value = 0.0;
+  $('valP').textContent = "0.00";
+  $('valQ').textContent = "0.00";
+  applyHilSetpoints();
+}
+
+function resetHilSimulation() {
+  fetch('/api/hil/reset', { method: 'POST' })
+    .then(res => res.json())
+    .then(data => {
+      console.log("HIL simulation reset:", data);
+      // Reset local sliders too
+      $('sliderP').value = 0.0;
+      $('sliderQ').value = 0.0;
+      $('valP').textContent = "0.00";
+      $('valQ').textContent = "0.00";
+    })
+    .catch(e => console.error("Failed to reset HIL simulation:", e));
+}
 </script>
 </body>
 </html>

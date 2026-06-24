@@ -3,6 +3,7 @@ using BessHilSimulator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BessDashboard;
 
@@ -17,6 +18,7 @@ static class BessWebServer
         };
         var builder = WebApplication.CreateBuilder(options);
         builder.WebHost.UseUrls(url);
+        builder.Services.AddSingleton<HilSimulationService>();
         var app = builder.Build();
 
         app.UseDefaultFiles();
@@ -40,6 +42,44 @@ static class BessWebServer
             var (steps, err) = RunSimulation(lines);
             if (!string.IsNullOrEmpty(err)) return Results.BadRequest(new { error = err });
             return Results.Ok(steps);
+        });
+
+        // HIL APIs
+        app.MapPost("/api/hil/start", (HilSimulationService sim) =>
+        {
+            sim.Start();
+            return Results.Ok(new { status = "started", port = sim.Port });
+        });
+
+        app.MapPost("/api/hil/stop", (HilSimulationService sim) =>
+        {
+            sim.Stop();
+            return Results.Ok(new { status = "stopped" });
+        });
+
+        app.MapGet("/api/hil/data", (HilSimulationService sim) =>
+        {
+            var state = sim.GetLatestState();
+            return Results.Ok(new {
+                running = state.isRunning,
+                port = state.port,
+                currentP = state.currentP,
+                currentQ = state.currentQ,
+                time = state.time,
+                steps = state.steps
+            });
+        });
+
+        app.MapPost("/api/hil/setpoint", (double p, double q, HilSimulationService sim) =>
+        {
+            sim.SetSetpoint(p, q);
+            return Results.Ok(new { status = "applied", p, q });
+        });
+
+        app.MapPost("/api/hil/reset", (HilSimulationService sim) =>
+        {
+            sim.Reset();
+            return Results.Ok(new { status = "reset" });
         });
 
         return app;
@@ -113,7 +153,7 @@ static class BessWebServer
     }
 }
 
-record SimStep(
+public record SimStep(
     double time, double inputP, double inputQ,
     double setpointP, double setpointQ,
     double physP, double physQ, double physPF, double physV, double physF, double physI,

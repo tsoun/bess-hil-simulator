@@ -122,8 +122,22 @@ namespace BessHilSimulator
             }
             catch
             {
-                // Return 0 if address is not initialized or out of range
                 return 0f;
+            }
+        }
+
+        public static void Stop()
+        {
+            try
+            {
+                _listener?.Stop();
+                _slave = null;
+                _listener = null;
+                Console.WriteLine("[Modbus] Server stopped.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Modbus] Stop Error: {ex.Message}");
             }
         }
     }
