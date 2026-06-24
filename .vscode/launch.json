@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "BESS Dashboard",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-dashboard",
+      "program": "${workspaceFolder}/BessDashboard/bin/Debug/net8.0-windows/BessDashboard.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}/BessDashboard",
+      "stopAtEntry": false,
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+      },
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "sourceFileMap": {
+        "/Views": "${workspaceFolder}/Views"
+      }
+    },
+    {
+      "name": "BESS Simulator (Console)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-simulator",
+      "program": "${workspaceFolder}/bin/Debug/net8.0/TestingSimulator.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "console": "integratedTerminal"
+    }
+  ]
+}

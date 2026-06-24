@@ -1,11 +1,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-COPY TestingSimulator.csproj ./
-RUN dotnet restore TestingSimulator.csproj
+COPY src/BessHilSimulator/BessHilSimulator.csproj src/BessHilSimulator/
+RUN dotnet restore src/BessHilSimulator/BessHilSimulator.csproj
 
 COPY . ./
-RUN dotnet publish TestingSimulator.csproj \
+RUN dotnet publish src/BessHilSimulator/BessHilSimulator.csproj \
     --configuration Release \
     --output /app/publish \
     --no-restore \
@@ -33,4 +33,4 @@ WORKDIR /data
 EXPOSE 502/tcp
 VOLUME ["/data"]
 
-CMD ["sh", "-c", "cp -n /app/pq-curves.json /data/pq-curves.json && exec dotnet /app/TestingSimulator.dll"]
+CMD ["sh", "-c", "cp -n /app/pq-curves.json /data/pq-curves.json && exec dotnet /app/BessHilSimulator.dll"]

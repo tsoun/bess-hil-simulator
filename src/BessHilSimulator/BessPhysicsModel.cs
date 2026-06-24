@@ -56,14 +56,15 @@ namespace BessHilSimulator
             double delaySeconds, double maxMva,
             double capacityMwh = 0.21, double initialSocPercent = 50.0,
             double socDischargeFloor = 5.0, double socChargeCeiling = 95.0,
-            double chargeEfficiency = 0.97, double dischargeEfficiency = 0.97)
+            double chargeEfficiency = 0.97, double dischargeEfficiency = 0.97,
+            string pqCurvesPath = "pq-curves.json")
         {
             // Calculate discrete coefficients for 1st order Low Pass Filter
             _ad_p = Math.Exp(-tickSeconds / lagSecondsP); _bd_p = 1.0 - _ad_p;
             _ad_q = Math.Exp(-tickSeconds / lagSecondsQ); _bd_q = 1.0 - _ad_q;
 
             _maxApparentPower = maxMva;
-            _capabilityCurve = new PqCapabilityCurve();
+            _capabilityCurve = new PqCapabilityCurve(pqCurvesPath);
             _delaySteps = (int)(delaySeconds / tickSeconds);
             _tickSeconds = tickSeconds;
 
