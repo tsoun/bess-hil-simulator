@@ -40,7 +40,7 @@ The following plots demonstrate the simulator's behavior using a **Sungrow ST501
 ![Power Factor](./imgs/PF.png)
 
 
-*Calculated current injected to/absorpted by the grid*
+*Calculated current injected to/absorbed by the grid*
 ![System Overview](./imgs/I_kA.png)
 
 ## Features
@@ -50,7 +50,6 @@ The following plots demonstrate the simulator's behavior using a **Sungrow ST501
 * **Modbus TCP Server:** Acts as a slave device (Port 502), exposing measurements on Input Registers and accepting commands via Holding Registers.
 * **P-Q Capability Curve:** Implements complex saturation logic where reactive power limits ($Q_{max}/Q_{min}$) float dynamically based on grid voltage and active power levels.
 * **Grid Scenarios:** Includes a scenario generator that injects voltage sags ($0.95$ pu) and swells ($1.05$ pu) to trigger capability curve changes.
-* **Web-Based Data Viewer:** A standalone `viewer.html` tool to visualize `BessData.csv` logs with interactive charts and zoom capabilities.
 
 ## System Architecture
 
@@ -154,19 +153,18 @@ To protect the battery, active power commands are clamped prior to the P-Q capab
 
 ## Project Structure
 
-* **`Program.cs`**: The main entry point. Initializes the model, starts the Modbus server, and runs the real-time simulation loop.
-* **`BessPhysicsModel.cs`**: Encapsulates the physics engine, IIR filters, and delay buffers (Queues).
-* **`ModbusServerWrapper.cs`**: Wraps the `NModbus` logic to handle register mapping and TCP connections.
-* **`PqCapabilityCurve.cs`**: Handles the complex saturation logic and interpolation between voltage levels (0.9pu to 1.1pu).
-* **`viewer.html`**: A frontend tool for analyzing simulation CSV logs.
-* **`BessData.csv`**: The output log file generated during simulation.
+* **`src/BessHilSimulator/Program.cs`**: The main entry point. Initializes the model, starts the Modbus server, and runs the real-time simulation loop.
+* **`src/BessHilSimulator/BessPhysicsModel.cs`**: Encapsulates the physics engine, IIR filters, and delay buffers (Queues).
+* **`src/BessHilSimulator/ModbusServerWrapper.cs`**: Wraps the `NModbus` logic to handle register mapping and TCP connections.
+* **`src/BessHilSimulator/PqCapabilityCurve.cs`**: Handles the complex saturation logic and interpolation between voltage levels (0.9pu to 1.1pu).
+* **`pq-curves.json`**: Configuration file containing the reactive power capability curve data.
+* **`scripts/ModbusClient.py`**: A Python script acting as a mock EMS to send setpoints and validate Modbus communication.
 
 ## Getting Started
 
 ### Prerequisites
-* .NET 6.0 SDK or later.
-* A Modbus TCP Client (e.g., QModMaster) or an actual EMS to act as the Master.
-* Modern Web Browser (for `viewer.html`).
+* .NET 8.0 SDK or later.
+* A Modbus TCP Client (e.g., QModMaster), the included `ModbusClient.py`, or an actual EMS to act as the Master.
 
 ### Installation
 1.  Clone the repository.
@@ -174,9 +172,9 @@ To protect the battery, active power commands are clamped prior to the P-Q capab
 3.  Restore NuGet packages (specifically `NModbus`).
 
 ### Running the Simulator
-Run the application with administrative privileges (required to bind to Port 502).
+Run the application with administrative privileges (required to bind to Port 502) from the root directory so it can locate `pq-curves.json`:
 
-    dotnet run
+    dotnet run --project src/BessHilSimulator/BessHilSimulator.csproj
 
 > **Note:** If Port 502 is blocked or in use, modify `ModbusServerWrapper.Start(502)` in `Program.cs` to use port `5020`.
 
@@ -185,24 +183,16 @@ Build the container image from the repository root:
 
     docker build -t bess-hil-simulator:local .
 
-Run the simulator in headless mode and expose the container's Modbus TCP port on
-host port `5020`:
+Run the simulator in headless mode and expose the container's Modbus TCP port on host port `5020`:
 
     mkdir -p data
     docker run --rm --user "$(id -u):$(id -g)" -p 5020:502 -v "$PWD/data:/data" bess-hil-simulator:local
 
-The Docker image defaults to `BESS_HIL_CONSOLE=false`, so it does not start the
-interactive console input thread. To use console control in Docker, enable it and
-allocate a TTY:
+The Docker image defaults to `BESS_HIL_CONSOLE=false`, so it does not start the interactive console input thread. To use console control in Docker, enable it and allocate a TTY:
 
     docker run --rm -it --user "$(id -u):$(id -g)" -e BESS_HIL_CONSOLE=true -p 5020:502 -v "$PWD/data:/data" bess-hil-simulator:local
 
-The simulator writes `BessData.csv` to the mounted `data` directory and copies the
-default `pq-curves.json` there if it is missing. Use `-p 502:502` instead if the EMS
-must connect to the standard Modbus TCP port and your host allows binding to port 502.
-
-Open `viewer.html` locally and select `data/BessData.csv` with **Load CSV File** to
-inspect the generated log.
+The simulator writes a `BessData.csv` log file to the mounted `data` directory and copies the default `pq-curves.json` there if it is missing.
 
 ## Usage
 
@@ -216,8 +206,8 @@ You can manually inject setpoints directly via the console window to test step r
 
 Disable console input for headless Modbus-only runs with either option:
 
-    dotnet run -- --no-console
-    BESS_HIL_CONSOLE=false dotnet run
+    dotnet run --project src/BessHilSimulator/BessHilSimulator.csproj -- --no-console
+    BESS_HIL_CONSOLE=false dotnet run --project src/BessHilSimulator/BessHilSimulator.csproj
 
 When console input is disabled, the simulator does not start the `ReadInput` thread.
 
@@ -238,11 +228,17 @@ The simulator listens on **Port 502** (Unit ID 1). Data is stored as **32-bit Fl
 | **Meas SOH** | Float (32-bit) | Input (RO) | 30015 (14) | State of Health (%) |
 | **Meas Temp** | Float (32-bit) | Input (RO) | 30017 (16) | Cell Temperature (°C) |
 
-### 3. Data Visualization
-1.  Let the simulation run; it logs data to `BessData.csv` in real-time.
-2.  Open `viewer.html` in your browser.
-3.  Click **Load CSV File** and select the generated `BessData.csv` or `data/BessData.csv` when running with Docker.
-4.  Use the tabs to view **Charts**, **Summary Stats**, and **Data Tables**.
+### 3. Mock EMS / Modbus Master Validation
+To quickly validate the Modbus interface, you can run the included Python script. 
+Ensure the C# simulator is running, and then in a separate terminal:
+
+    pip install pymodbus
+    python scripts/ModbusClient.py
+
+The script will connect to the simulator, enable it, and start injecting random setpoints, verifying that the physical measurements track the setpoints correctly.
+
+### 4. Data Logging
+While the simulation runs, it logs data to a `BessData.csv` file in real-time. You can open this file using your preferred data analysis tool (Excel, Python Pandas, MATLAB, etc.) to visualize performance over long periods.
 
 ## Configuration
 

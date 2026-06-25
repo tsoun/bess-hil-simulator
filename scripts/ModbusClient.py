@@ -56,14 +56,14 @@ def main():
         print("FAILED to connect. Is the C# Simulator running?")
         return
 
-    print("✓ Connected successfully!")
+    print("[OK] Connected successfully!")
     
     # Enable the system (Coil 0)
     # Coils usually don't have the +1 offset issue in NModbus logic 
     # unless manually shifted, but usually they are separate.
     try:
         client.write_coil(0, True)
-        print("✓ System ENABLED via coil 0")
+        print("[OK] System ENABLED via coil 0")
         time.sleep(0.2)
     except Exception as e:
         print(f"Could not enable system: {e}")
@@ -120,11 +120,11 @@ def main():
                     error_q = abs(meas_q - cmd_q)
                     
                     if error_p < 0.005 and error_q < 0.005:
-                        status = "✓ AT SETPOINT"
+                        status = "[OK] AT SETPOINT"
                     elif error_p < 0.05: # Looser tolerance for ramping
-                        status = "→ TRACKING"
+                        status = "-> TRACKING"
                     else:
-                        status = "⟳ RAMPING"
+                        status = "~~ RAMPING"
                     
                     timestamp = time.strftime("%H:%M:%S")
                     print(f"{timestamp:<10} | {cmd_p:>8.3f} {cmd_q:>8.3f} | "
@@ -148,7 +148,7 @@ def main():
             zero_regs = float_to_registers_le(0.0)
             client.write_registers(0 + OFFSET_ADDR, zero_regs)
             client.write_registers(2 + OFFSET_ADDR, zero_regs)
-            print("✓ Setpoints reset to zero")
+            print("[OK] Setpoints reset to zero")
             time.sleep(0.5)
         except:
             pass
@@ -156,13 +156,13 @@ def main():
         # Disable system
         try:
             client.write_coil(0, False)
-            print("✓ System DISABLED")
+            print("[OK] System DISABLED")
         except:
             pass
             
     finally:
         client.close()
-        print("✓ Disconnected")
+        print("[OK] Disconnected")
         print("="*120)
 
 if __name__ == "__main__":
