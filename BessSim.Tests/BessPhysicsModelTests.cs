@@ -1,8 +1,8 @@
 using System;
 using Xunit;
-using BessHilSimulator;
+using BessSim.Core;
 
-namespace TestingSimulator.Tests
+namespace BessSim.Tests
 {
     public class BessPhysicsModelTests
     {

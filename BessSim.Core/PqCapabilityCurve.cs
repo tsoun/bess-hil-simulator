@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json; // Make sure to use this namespace
 
-namespace BessHilSimulator
+namespace BessSim.Core
 {
     // 1. Create a class to represent the JSON structure
     public class CurveConfig

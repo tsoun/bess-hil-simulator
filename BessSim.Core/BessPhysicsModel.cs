@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 
-namespace BessHilSimulator
+namespace BessSim.Core
 {
     // Simulates Inverter Dynamics: 1st Order Lag + Transport Delay + Saturation
     public class BessPhysicsModel

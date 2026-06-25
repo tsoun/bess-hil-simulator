@@ -21,11 +21,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\BessHilSimulator\BessHilSimulator.csproj" />
+    <ProjectReference Include="..\BessSim.Core\BessSim.Core.csproj" />
+    <ProjectReference Include="..\BessSim.Hil\BessSim.Hil.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\pq-curves.json" Link="pq-curves.json">
+    <None Include="..\pq-curves.json" Link="pq-curves.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

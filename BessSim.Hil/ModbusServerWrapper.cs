@@ -3,8 +3,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using NModbus;
+using BessSim.Core;
 
-namespace BessHilSimulator
+namespace BessSim.Hil
 {
     // Wraps the NModbus Slave logic.
     // Allows the Simulator to act as a Server for the EMS.
