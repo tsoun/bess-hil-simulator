@@ -118,15 +118,23 @@ The following plots demonstrate the simulator's behavior using a **Sungrow ST501
 The system uses a discrete-time state-space representation.
 
 #### 1. State Vector ($x$)
-$x(k) = \begin{bmatrix} P_{phys}(k) \\ Q_{phys}(k) \\ V_{grid}(k) \\ f_{grid}(k) \end{bmatrix}^T$
+
+$$
+x(k) = \begin{bmatrix} P_{phys}(k) \\ Q_{phys}(k) \\ V_{grid}(k) \\ f_{grid}(k) \end{bmatrix}^T
+$$
 
 #### 2. Input Vector ($u$)
-$u(k) = \begin{bmatrix} P_{setpoint}(k) \\ Q_{setpoint}(k) \end{bmatrix}^T$
+
+$$
+u(k) = \begin{bmatrix} P_{setpoint}(k) \\ Q_{setpoint}(k) \end{bmatrix}^T
+$$
 
 #### 3. Output Vector ($y$)
 To simulate realistic SCADA feedback, a transport delay $N$ is applied to the physical states. The output seen by the EMS includes additional BESS state parameters:
 
-$y(k) = \begin{bmatrix} P_{meas}(k) \\ Q_{meas}(k) \\ PF_{meas}(k) \\ V_{meas}(k) \\ f_{meas}(k) \\ I_{meas}(k) \\ Avail_{meas}(k) \\ SOC_{meas}(k) \\ SOH_{meas}(k) \\ Temp_{meas}(k) \end{bmatrix} = \mathcal{H}(x_{extended}(k-N))$
+$$
+y(k) = \begin{bmatrix} P_{meas}(k) \\ Q_{meas}(k) \\ PF_{meas}(k) \\ V_{meas}(k) \\ f_{meas}(k) \\ I_{meas}(k) \\ Avail_{meas}(k) \\ SOC_{meas}(k) \\ SOH_{meas}(k) \\ Temp_{meas}(k) \end{bmatrix} = \mathcal{H}(x_{extended}(k-N))
+$$
 
 ---
 
