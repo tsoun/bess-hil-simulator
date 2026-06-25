@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using System.Threading;
+using System.Text.Json;
 
 namespace BessHilSimulator
 {
@@ -95,6 +96,12 @@ namespace BessHilSimulator
         public double SetpointQ { get; set; }
         public double GridV { get; set; } = 1.0;
         public double GridF { get; set; } = 50.0;
+    }
+
+    public class SimulationConfig
+    {
+        public int GranularityMs { get; set; } = 100;
+        public int TotalDelayMs { get; set; } = 500;
     }
 
     class Program
@@ -262,9 +269,36 @@ namespace BessHilSimulator
             string csvFilePath = "BessData.csv";
             bool consoleInputEnabled = ShouldStartConsoleInput(args);
             
+            // Load Configuration
+            string configPath = "sim-config.json";
+            SimulationConfig config = new SimulationConfig();
+            if (File.Exists(configPath))
+            {
+                try
+                {
+                    string json = File.ReadAllText(configPath);
+                    var parsed = JsonSerializer.Deserialize<SimulationConfig>(json);
+                    if (parsed != null) config = parsed;
+                    Console.WriteLine($"Loaded config from {configPath}: GranularityMs={config.GranularityMs}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error reading {configPath}: {ex.Message}. Using defaults.");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"{configPath} not found. Creating default configuration file.");
+                try
+                {
+                    File.WriteAllText(configPath, JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }));
+                }
+                catch { }
+            }
+
             // Simulation Parameters
-            double Ts = 0.1;      // Sampling Time (100ms)
-            double Tdelay = 0.5;  // Total measurement loop latency (500ms)
+            double Ts = config.GranularityMs / 1000.0;      // Sampling Time
+            double Tdelay = config.TotalDelayMs / 1000.0;  // Total measurement loop latency
             
             // Init Model
             var plant = new BessPhysicsModel(Ts, 0.2, 0.1, Tdelay, 0.21);
